@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MACH 5: the daily aerospace quiz</title>
+<style>
+:root{--bg:#e6ecf0;--panel:#f5f8fa;--ink:#15212c;--mute:#586979;--line:#c3cfd8;--ok:#b6c63a;--okink:#1c2305;--bad:#d4492c;--badink:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1923;--panel:#172531;--ink:#e6edf3;--mute:#8da0b1;--line:#2a3e4e;--bad:#e2573a}}
+:root[data-theme="dark"]{--bg:#0e1923;--panel:#172531;--ink:#e6edf3;--mute:#8da0b1;--line:#2a3e4e;--bad:#e2573a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:22px 16px 48px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+h1{margin:0;font:800 38px/1 Bahnschrift,"DIN Alternate","Arial Narrow",Impact,sans-serif;letter-spacing:.03em}
+.sub{margin:6px 0 0;color:var(--mute);font-size:14px}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--mute);white-space:nowrap}
+.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:22px 0 18px}
+.tile{aspect-ratio:1.7;border:2px solid var(--line);border-radius:6px;display:grid;place-items:center;font-weight:700;color:var(--mute)}
+.tile.cur{border-color:var(--ink);color:var(--ink)}
+.tile.ok{background:var(--ok);border-color:var(--ok);color:var(--okink)}
+.tile.bad{background:var(--bad);border-color:var(--bad);color:var(--badink)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
+.cat{color:var(--mute);font-size:14px;margin-bottom:6px}
+.q{font-size:20px;line-height:1.35;font-weight:600;margin:0 0 16px}
+.opt{display:flex;gap:12px;width:100%;text-align:left;font:inherit;color:inherit;background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:12px 14px;margin:0 0 10px;cursor:pointer}
+.opt:hover:not(:disabled){border-color:var(--ink)}
+.opt b{color:var(--mute);min-width:1.1em}
+.opt:disabled{cursor:default}
+.opt.ok{background:var(--ok);border-color:var(--ok);color:var(--okink)}
+.opt.ok b{color:var(--okink)}
+.opt.bad{background:var(--bad);border-color:var(--bad);color:var(--badink)}
+.opt.bad b{color:var(--badink)}
+.opt.dim{opacity:.55}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.fb{margin:6px 0 16px;font-size:15px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:8px;padding:11px 20px;background:var(--ink);color:var(--bg);cursor:pointer}
+.score{font:800 56px/1 Bahnschrift,"DIN Alternate","Arial Narrow",Impact,sans-serif;margin:0}
+.msg{margin:4px 0 14px;color:var(--mute)}
+.grid{font-size:26px;letter-spacing:2px;margin:0 0 14px}
+h2{font-size:16px;margin:24px 0 10px}
+.bars div{display:grid;grid-template-columns:18px 1fr 28px;gap:8px;align-items:center;font-size:14px;margin-bottom:4px}
+.bars i{display:block;height:16px;min-width:3px;border-radius:3px;background:var(--line)}
+.bars .me i{background:var(--ok)}
+.stats{display:flex;gap:22px;margin:0 0 6px}
+.stats p{margin:0;font-size:13px;color:var(--mute)}
+.stats strong{display:block;font-size:22px;color:var(--ink)}
+ol.rv{padding:0;margin:0;list-style:none}
+.rv li{padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.rv small{color:var(--mute);display:block}
+.cd{font-variant-numeric:tabular-nums;font-weight:700}
+.foot{margin-top:26px;font-size:13px;color:var(--mute)}
+@media (prefers-reduced-motion:no-preference){.tile{transition:background .2s,border-color .2s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<div><h1>MACH 5</h1><p class="sub">Five aerospace questions. One set a day.</p></div>
+<div style="text-align:right"><div class="chip" id="num"></div></div>
+</header>
+<div id="app"></div>
+<p class="foot">New questions at midnight, your time. Your streak and scores are saved in this browser.</p>
+</div>
+<script>
+const CATS=["Structures","Aerodynamics","Propulsion","Manufacturing","Flight mechanics"];
+// [question, correct, wrong, wrong, wrong, explanation]
+const Q=[
+[
+["Euler’s critical buckling load for a column varies with length as…","1/L²","1/L","1/L³","Independent of L","P_cr = π²EI/(KL)², so doubling the length cuts the buckling load to a quarter."],
+["For a thin-walled single-cell section under torque T, the Bredt–Batho shear flow is…","T / 2A","T / A","T·A / 2","T / (2πr)","q = T/2A, where A is the area enclosed by the wall midline. It is constant around the cell."],
+["Peak stress at the edge of a small circular hole in a wide plate under uniaxial tension is about…","3× nominal","1.5× nominal","2× nominal","5× nominal","Kt = 3 for a circular hole in an infinite plate (Kirsch solution)."],
+["Miner’s rule is used to estimate…","Cumulative fatigue damage","Buckling load","Thermal stress","Creep rupture time","Damage sums as Σ n/N, and failure is predicted when the sum reaches 1."],
+["In a semi-monocoque fuselage, which members mainly carry axial loads from bending?","Stringers and longerons","Skin panels","Frames","Doublers","Stringers and longerons take the axial load, skin carries shear, and frames hold the shape."],
+["On a beam in pure bending, the neutral axis is where…","Bending stress is zero","Shear stress peaks","Deflection is zero","Moment is largest","Bending stress varies linearly with distance from the neutral axis and passes through zero there."],
+["A positive margin of safety means…","Allowable load exceeds applied load","Applied load exceeds allowable","Factor of safety equals 1","The part has yielded","MS = allowable / applied − 1, so MS ≥ 0 means the part passes."],
+["Which property best describes a material’s stiffness?","Young’s modulus","Yield strength","Ultimate strength","Fracture toughness","E is the slope of the elastic stress–strain curve. Strength values say nothing about stiffness."]
+],[
+["The lift-curve slope of a thin airfoil in incompressible flow is…","2π per radian","π per radian","4π per radian","1 per radian","Thin airfoil theory gives cl = 2π(α − α₀)."],
+["The induced drag coefficient of a wing is…","CL² / (π e AR)","CL / (π e AR)","CL² · AR / π","CL / AR²","CDi = CL²/(π e AR), so a higher aspect ratio cuts induced drag."],
+["Boundary layer separation is driven by…","An adverse pressure gradient","A favorable pressure gradient","Zero viscosity","Supersonic flow only","Flow slowing in rising pressure runs out of momentum near the wall and peels away."],
+["Critical Mach number is the freestream Mach at which…","Local flow first reaches Mach 1 somewhere","The whole airfoil is supersonic","A bow shock detaches","Drag is at its minimum","Flow accelerates over the surface, so a pocket goes sonic before the freestream does."],
+["Wing sweep is used mainly to…","Delay compressibility drag rise","Raise low-speed CLmax","Reduce skin friction","Cut induced drag","Sweep lowers the velocity component normal to the leading edge, so drag divergence comes later."],
+["Reynolds number compares…","Inertial to viscous forces","Pressure to gravity forces","Flow speed to sound speed","Lift to drag","Re = ρVL/μ. It governs transition and boundary layer behavior."],
+["Flow just downstream of a normal shock is…","Subsonic","Supersonic","Sonic","Hypersonic","A normal shock always drops the flow to subsonic, with rises in pressure, density and temperature."],
+["Dynamic pressure is…","½ρV²","ρV²","½ρV","ρgh","q = ½ρV² is the scale for aerodynamic loads: L = q·S·CL."]
+],[
+["The ideal rocket equation gives Δv as…","Isp·g₀·ln(m₀/m_f)","Isp·g₀·(m₀/m_f)","Isp·g₀·ln(m_f/m₀)","½·Isp·g₀·(m₀ − m_f)","Δv grows only logarithmically with mass ratio, which is why staging helps."],
+["A turbojet follows which thermodynamic cycle?","Brayton","Otto","Rankine","Diesel","Compression, constant-pressure heat addition, expansion, heat rejection: the Brayton cycle."],
+["Choked flow in a converging–diverging nozzle means…","Mach 1 at the throat","Mach 1 at the exit","Subsonic throughout","A shock at the inlet","Once choked, mass flow is fixed by stagnation conditions and throat area."],
+["Specific impulse is measured in…","Seconds","Newtons","m/s²","kg/s","Isp = thrust divided by propellant weight flow, which leaves units of seconds."],
+["A ramjet can’t make thrust at zero airspeed because…","It relies on ram compression, not a compressor","It has no combustor","Its nozzle is too small","It burns solid fuel only","With no forward speed there is no ram effect, so it needs a booster to get going."],
+["Raising a turbofan’s bypass ratio generally improves…","Propulsive efficiency at subsonic speed","Supersonic dash thrust","Turbine temperature limits","Inlet pressure recovery","Moving more air at a lower exhaust velocity brings jet speed closer to flight speed."],
+["A Hohmann transfer between two circular orbits uses…","Two impulsive burns","One continuous burn","Three burns","A gravity assist","One burn enters the elliptical transfer orbit and a second circularizes at the target."],
+["Which propellant pair is the classic high-energy upper-stage choice?","LH₂ / LOX","RP-1 / LOX","Hydrazine / N₂O₄","Kerosene / H₂O₂","Hydrogen and oxygen give an Isp near 450 s in vacuum, the best of the common chemical pairs."]
+],[
+["An autoclave cures composite layups using…","Heat and pressure","Vacuum alone","UV light","Microwaves","Pressure consolidates the plies and suppresses voids while the resin cures under heat."],
+["Friction stir welding joins metal by…","Plasticizing it with a rotating tool, in the solid state","Melting it with an arc","Fusing it with a laser","Brazing with filler","The joint never melts, which avoids many solidification defects in aluminum."],
+["Shot peening improves fatigue life by…","Inducing compressive residual stress at the surface","Removing surface oxide","Hardening the core","Relieving all residual stress","Compressive surface stress slows crack initiation, which starts at the surface."],
+["Which additive process fuses metal powder with a laser?","Powder bed fusion","FDM","Stereolithography","Binder jetting","Laser powder bed fusion (SLM/DMLS) melts each powder layer selectively."],
+["Anodizing is a surface treatment mainly used on…","Aluminum","Carbon fiber","Inconel","Glass","It grows a controlled oxide layer for corrosion and wear resistance."],
+["A 5-axis CNC machine adds what to X, Y and Z?","Two rotary axes","Two more linear axes","A second spindle","Two tool changers","The rotary axes let the tool reach complex surfaces in a single setup."],
+["Prepreg is…","Fiber pre-impregnated with partially cured resin","Dry fabric infused later","A metal sheet primer","A core material","It is stored cold to hold the resin at B-stage until layup and cure."],
+["A T6 temper on aluminum means…","Solution heat treated, then artificially aged","Strain hardened only","Annealed","Naturally aged only","T6 is solution treated, quenched and artificially aged. T4 is naturally aged."]
+],[
+["A positive static margin means the CG is…","Ahead of the neutral point","Behind the neutral point","Exactly at the neutral point","At the wing leading edge","Static margin = (x_np − x_cg)/c̄, so CG ahead of the neutral point is statically stable in pitch."],
+["The phugoid mode is…","A slow oscillation trading altitude and airspeed","A fast pitch oscillation","A coupled yaw–roll oscillation","A divergent spiral","It has a long period, often a minute or more, and is lightly damped."],
+["The Dutch roll mode is…","A coupled yaw–roll oscillation","A slow altitude oscillation","A pure pitch mode","A steady spiral dive","Yaw and roll oscillate together. Swept-wing jets use yaw dampers to tame it."],
+["Stall speed rises with…","Higher wing loading","Higher CLmax","Lower weight","Lower altitude","Vs = √(2W / ρ S CLmax), so heavier loading and thinner air raise it."],
+["In a PID controller, the D term responds to…","The rate of change of error","Accumulated past error","Current error only","Setpoint magnitude","Derivative action adds damping by reacting to how fast the error is changing."],
+["The load factor in a steady level 60° banked turn is…","2 g","1.5 g","1.15 g","3 g","n = 1/cos φ, and cos 60° = 0.5, so n = 2."],
+["Ailerons primarily control…","Roll","Pitch","Yaw","Airspeed","Differential lift across the wings produces a rolling moment about the longitudinal axis."],
+["Adverse yaw in a roll is caused mainly by…","More induced drag on the wing that rises","Engine torque","Gyroscopic precession","Wing dihedral","The rising wing makes more lift and more induced drag, yawing the nose away from the turn."]
+]];
+
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function shuffle(arr,r){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+const $=s=>document.querySelector(s);
+const KEY="mach5:v1";
+const today=()=>{const d=new Date();return Math.floor(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/864e5)};
+const DAY=today(), NUM=Math.max(1,DAY-Math.floor(Date.UTC(2026,10,19)/864e5)+1);
+function blank(){return{day:DAY,a:[],stats:{played:0,dist:[0,0,0,0,0,0],streak:0,max:0,last:null}}}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.stats){if(s.day!==DAY){s.day=DAY;s.a=[]}return s}}catch(e){}return blank()}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+let S=load(), revealed=false;
+
+const order=shuffle([0,1,2,3,4],rng(DAY));
+const P=order.map(c=>{const row=Q[c][(DAY*3+c)%8];const opts=shuffle(row.slice(1,5),rng(DAY*7+c+1));return{cat:CATS[c],q:row[0],opts,ans:opts.indexOf(row[1]),ex:row[5]}});
+const score=()=>S.a.reduce((n,x,i)=>n+(x===P[i].ans?1:0),0);
+
+function finish(){if(S.fin===DAY)return;const st=S.stats,s=score();st.played++;st.dist[s]++;st.streak=st.last===DAY-1?st.streak+1:1;st.max=Math.max(st.max,st.streak);st.last=DAY;S.fin=DAY}
+
+function tiles(){return P.map((_,i)=>{let c="tile";if(i<S.a.length)c+=S.a[i]===P[i].ans?" ok":" bad";else if(i===S.a.length)c+=" cur";return `<div class="${c}">${i+1}</div>`}).join("")}
+
+let shareText="";
+function results(){
+  const s=score(),st=S.stats;
+  const grid=S.a.map((x,i)=>x===P[i].ans?"🟩":"🟥").join("");
+  shareText="MACH 5 #"+NUM+"  "+s+"/5\n"+grid;
+  const msg=["Back to the drawing board","Needs another design review","Taxiing to the runway","Cleared for takeoff","One squawk from perfect","Mach 5 achieved"][s];
+  const mx=Math.max(1,...st.dist);
+  const win=st.played?Math.round(100*st.dist.reduce((t,n,k)=>t+n*k,0)/(5*st.played)):0;
+  let h=`<div class="card"><p class="score">${s}/5</p><p class="msg">${msg}</p><p class="grid">${grid}</p>
+  <button class="btn" id="copy">Copy result</button>
+  <h2>Today’s questions</h2><ol class="rv">`;
+  P.forEach((p,i)=>{h+=`<li>${S.a[i]===p.ans?"🟩":"🟥"} <b>${p.cat}:</b> ${p.q}<small>Answer: ${p.opts[p.ans]}</small></li>`});
+  h+=`</ol><h2>Your stats</h2><div class="stats"><p><strong>${st.played}</strong>Played</p><p><strong>${win}%</strong>Avg. score</p><p><strong>${st.streak}</strong>Streak</p><p><strong>${st.max}</strong>Best streak</p></div>
+  <div class="bars">`;
+  st.dist.forEach((n,k)=>{h+=`<div class="${k===s?"me":""}"><span>${k}</span><i style="width:${Math.round(100*n/mx)}%"></i><span>${n}</span></div>`});
+  h+=`</div><h2>Next set in</h2><p class="cd" id="cd" style="font-size:24px;margin:0">--:--:--</p></div>`;
+  return h;
+}
+
+function render(){
+  const n=S.a.length,st=S.stats;
+  $("#num").textContent="Set #"+NUM+" · streak "+(st.last!==null&&st.last>=DAY-1?st.streak:0);
+  let h=`<div class="tiles">${tiles()}</div>`;
+  if(n<5||revealed){
+    const i=revealed?n-1:n,p=P[i];
+    h+=`<div class="card"><div class="cat">${p.cat}, question ${i+1} of 5</div><p class="q">${p.q}</p>`;
+    p.opts.forEach((o,k)=>{let c="opt",d="";if(revealed){d="disabled";c+=k===p.ans?" ok":k===S.a[i]?" bad":" dim"}
+      h+=`<button class="${c}" ${d} data-k="${k}"><b>${"ABCD"[k]}</b><span>${o}</span></button>`});
+    if(revealed){h+=`<p class="fb"><strong>${S.a[i]===p.ans?"Correct.":"Not quite."}</strong> ${p.ex}</p><button class="btn" id="next">${n<5?"Next question":"See results"}</button>`}
+    h+=`</div>`;
+  }else h+=results();
+  $("#app").innerHTML=h;
+  tick();
+}
+
+$("#app").addEventListener("click",e=>{
+  const b=e.target.closest("[data-k]");
+  if(b&&!revealed&&S.a.length<5){S.a.push(+b.dataset.k);revealed=true;if(S.a.length===5)finish();save();render();return}
+  if(e.target.closest("#next")){revealed=false;render();window.scrollTo(0,0);return}
+  if(e.target.closest("#copy")){
+    const btn=e.target.closest("#copy"),done=()=>{btn.textContent="Copied"};
+    try{navigator.clipboard.writeText(shareText).then(done,()=>{btn.textContent="Copy failed"})}catch(err){btn.textContent="Copy failed"}
+  }
+});
+
+function tick(){
+  if(today()!==DAY){location.reload();return}
+  const el=$("#cd");if(!el)return;
+  const d=new Date(),m=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);
+  let s=Math.max(0,Math.floor((m-d)/1000));
+  const p=v=>String(v).padStart(2,"0");
+  el.textContent=p(Math.floor(s/3600))+":"+p(Math.floor(s%3600/60))+":"+p(s%60);
+}
+setInterval(tick,1000);
+render();
+</script>
+</body>
+</html>
