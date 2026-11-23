@@ -52,6 +52,16 @@ ol.rv{padding:0;margin:0;list-style:none}
 .cd{font-variant-numeric:tabular-nums;font-weight:700}
 .foot{margin-top:26px;font-size:13px;color:var(--mute)}
 @media (prefers-reduced-motion:no-preference){.tile{transition:background .2s,border-color .2s}}
+.modes{display:grid;gap:10px}
+.mode{text-align:left;font:inherit;color:inherit;background:var(--panel);border:1.5px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer}
+.mode:hover{border-color:var(--ink)}
+.mode b{display:block;font-size:18px}
+.mode span{color:var(--mute);font-size:14px}
+.link{font:inherit;font-size:14px;color:var(--mute);background:none;border:0;padding:0;margin:14px 0 0;cursor:pointer}
+.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.tbar{height:6px;background:var(--line);border-radius:3px;margin-bottom:14px;overflow:hidden}
+.tbar i{display:block;height:100%;width:100%;background:var(--ink)}
+.tile{font-size:13px}
 </style>
 </head>
 <body>
@@ -123,61 +133,218 @@ const DAY=today(), NUM=Math.max(1,DAY-Math.floor(Date.UTC(2026,10,19)/864e5)+1);
 function blank(){return{day:DAY,a:[],stats:{played:0,dist:[0,0,0,0,0,0],streak:0,max:0,last:null}}}
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.stats){if(s.day!==DAY){s.day=DAY;s.a=[]}return s}}catch(e){}return blank()}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-let S=load(), revealed=false;
-
-const order=shuffle([0,1,2,3,4],rng(DAY));
-const P=order.map(c=>{const row=Q[c][(DAY*3+c)%8];const opts=shuffle(row.slice(1,5),rng(DAY*7+c+1));return{cat:CATS[c],q:row[0],opts,ans:opts.indexOf(row[1]),ex:row[5]}});
-const score=()=>S.a.reduce((n,x,i)=>n+(x===P[i].ans?1:0),0);
-
+let S=load(),G=null,V="menu",timer=null;
+const DL={e:"Easy",h:"Hard",i:"Insane",x:"Impossible"};
+// [topic, difficulty, interview(1/0), question, correct, wrong, wrong, wrong, explanation]
+const B=[
+["Thermodynamics","e",1,"In a reversible adiabatic process, entropy…","Stays constant","Increases","Decreases","Drops to zero","Reversible and adiabatic means isentropic: no heat transfer and no entropy generation."],
+["Orbital Mechanics","e",0,"Escape speed from a circular orbit is how many times the local circular speed?","√2","2","1.5","π","v_esc = √(2μ/r) and v_circ = √(μ/r), so the ratio is √2."],
+["Orbital Mechanics","e",1,"A geostationary orbit has a period of about…","24 hours","12 hours","90 minutes","1 week","It matches Earth’s rotation, and it works only over the equator at roughly 35,786 km."],
+["Systems Engineering","e",1,"In the V-model, each design phase on the left is paired with…","A verification or validation phase on the right","A budget review","A supplier audit","A launch poll","Requirements pair with acceptance tests, and design pairs with integration and test."],
+["CAD","e",1,"A fully defined sketch in parametric CAD means…","Every degree of freedom is fixed by dimensions or relations","It has no dimensions","It has been extruded","It contains only splines","Fully defined sketches rebuild predictably when you edit a dimension."],
+["Intro to Aerospace","e",0,"In steady level flight, the four forces are…","Lift, weight, thrust, drag","Lift, mass, power, drag","Lift, weight, torque, drag","Thrust, drag, pitch, yaw","Lift balances weight and thrust balances drag."],
+["Mechanical Measurements","e",1,"A strain gauge is usually read with a Wheatstone bridge because it…","Turns tiny resistance changes into measurable voltage","Removes the need for calibration","Amplifies strain mechanically","Eliminates all noise","Gauge resistance changes by a tiny fraction, and a bridge reads that small imbalance well."],
+["Controls","h",1,"A system with poles at s = −1 ± 2j is…","Stable and oscillatory","Unstable and oscillatory","Stable with no oscillation","Marginally stable","Negative real parts mean stable, and the imaginary parts add oscillation."],
+["Controls","h",1,"Adding an integrator to a stable loop mainly…","Drives step steady-state error to zero","Adds phase lead","Raises bandwidth","Guarantees stability","A type-1 loop tracks a step with zero error, but the added lag can hurt stability."],
+["Compressible Flow","h",1,"Choked mass flow through a nozzle throat depends on…","Stagnation conditions and throat area","Back pressure and exit area","Exit Mach number only","Throat static pressure only","With M = 1 at the throat, lowering back pressure cannot change the mass flow."],
+["Machine Design","h",1,"On a Goodman diagram, raising mean tensile stress at fixed alternating stress…","Lowers the fatigue safety factor","Raises the safety factor","Has no effect","Raises the endurance limit","Mean tension shrinks the alternating stress the part can survive."],
+["Flight Dynamics","h",0,"The short-period mode is mainly set by…","Pitch stiffness and pitch damping","Thrust lapse","Fuel burn","Wing dihedral","It is a fast, well-damped oscillation in angle of attack and pitch rate."],
+["Aerospace Propulsion","h",1,"In a turbojet, the turbine’s main job is to…","Extract just enough work to drive the compressor","Produce all the thrust directly","Cool the combustor","Raise the nozzle pressure ratio","The remaining energy expands through the nozzle to make thrust."],
+["Aerospace Materials","h",1,"Why is 2024-T3 often chosen over 7075-T6 for lower wing skins?","Better damage tolerance and slower crack growth","Higher static strength","Lower density","It can’t be anodized","Lower skins see tension and fatigue, while 7075 suits compression-dominated upper skins."],
+["Mechatronics","h",1,"A 10-bit ADC with a 5 V reference has a step size of about…","4.9 mV","9.8 mV","0.5 mV","49 mV","5 V / 2¹⁰ ≈ 4.88 mV."],
+["Thermodynamics","h",0,"For an isentropic ideal gas, T₂/T₁ equals…","(p₂/p₁)^((γ−1)/γ)","(p₂/p₁)^(γ/(γ−1))","(p₂/p₁)^γ","(p₁/p₂)^γ","This relation sets temperature change across ideal compressors and turbines."],
+["Aerodynamics","i",1,"On an elliptical lift distribution, induced downwash along the span is…","Constant","Linear","Zero","Largest at the tips","That is why the elliptical distribution gives minimum induced drag, with e = 1."],
+["Compressible Flow","i",0,"Rayleigh flow describes…","Frictionless constant-area flow with heat addition","Adiabatic constant-area flow with friction","Isothermal flow with friction","Isentropic flow in a varying-area duct","Fanno flow is the one with friction."],
+["Aerospace Structures","i",1,"The shear center of a thin-walled open section is the point where…","A transverse load bends the beam without twisting it","The centroid always sits","The torsional constant peaks","Normal stress vanishes","Loads applied off the shear center add torsion, which matters for channels and Z-sections."],
+["Multiphysics Simulations","i",0,"The added-mass instability most often hits…","Partitioned FSI schemes when the structure is light relative to the fluid","Monolithic schemes with stiff structures","Steady thermal-only runs","Modal analyses with no fluid","Explicit staggered coupling can diverge when the fluid’s added mass dominates."],
+["Flight Mechanics","i",1,"A jet’s Breguet range at constant altitude is maximized by flying at max…","√CL / CD","CL / CD","CL / CD²","CL^(3/2) / CD","Max L/D is for jet endurance and for propeller range."],
+["Mission Design","i",0,"A bi-elliptic transfer can beat a Hohmann in Δv once the radius ratio exceeds about…","12","2.5","5","30","The threshold is 11.94, and above about 15.6 the bi-elliptic always wins."],
+["Aerodynamics","i",1,"The Prandtl–Glauert rule scales incompressible Cp by…","1/√(1−M²)","1/(1−M²)","√(1−M²)","1+M²/2","It holds for subsonic, small-disturbance flow and blows up near Mach 1."],
+["Orbital Mechanics","x",0,"In the restricted three-body problem, L4 and L5 are stable only if the mass ratio is below about…","0.0385","0.5","0.1","0.001","The Routh criterion gives μ < 0.03852, which the Sun–Earth and Earth–Moon systems both satisfy."],
+["Compressible Flow","x",0,"Air (γ = 1.4) crosses a normal shock at M₁ = 2. The downstream Mach is about…","0.577","0.5","0.72","0.33","M₂² = (1 + 0.2·4)/(1.4·4 − 0.2) = 1/3."],
+["Mechanics of Materials","x",0,"Poisson’s ratio for a stable isotropic linear elastic solid must lie between…","−1 and 0.5","0 and 0.5","−1 and 1","0 and 1","Positive bulk and shear moduli require −1 < ν < 0.5, and auxetic materials go below zero."],
+["Orbital Mechanics","x",0,"A sun-synchronous orbit needs its node to precess about…","0.9856° per day","1.5° per day","360° per day","0.25° per day","That is 360° per tropical year, driven by Earth’s J₂ oblateness."],
+["Fluid Mechanics","x",0,"The Blasius laminar flat-plate local skin-friction coefficient is…","0.664/√Re_x","1.328/√Re_x","0.074/Re_x^0.2","0.664/Re_x","1.328/√Re_L is the average coefficient over length L."]
+,
+["Mechanics of Materials","e",1,"Normal stress is defined as…","Force divided by cross-sectional area","Force times area","Change in length over original length","Force times distance","σ = P/A. Change in length over original length is strain."],
+["Mechanics of Materials","e",1,"Young’s modulus has the same units as…","Stress","Strain","Force","Energy","E = σ/ε, and strain is dimensionless, so E carries units of stress (Pa or psi)."],
+["Mechanics of Materials","e",1,"On a tension test curve, the yield point marks…","The onset of permanent plastic deformation","Fracture","Maximum load","The start of necking","Past yield, the material no longer returns to its original length when unloaded."],
+["Mechanics of Materials","e",1,"In a solid circular shaft under torque, shear stress is largest…","At the outer surface","At the center","Halfway to the surface","Equal everywhere","τ = Tr/J grows linearly with radius, so the surface is critical."],
+["Mechanics of Materials","e",1,"A simply supported beam carries a central point load P over span L. The maximum bending moment is…","PL/4","PL/2","PL/8","PL","Each reaction is P/2, so the moment at midspan is (P/2)(L/2) = PL/4."],
+["Mechanics of Materials","e",1,"A statically determinate structure is one where…","Equilibrium equations alone give all the reactions","Deflection is zero","Loads never change","Every member carries tension","Indeterminate structures need compatibility equations on top of equilibrium."],
+["Mechanics of Materials","h",1,"The centroidal moment of inertia of a rectangle (base b, height h) about the axis parallel to b is…","bh³/12","bh³/3","bh²/6","b²h/12","Height is cubed, which is why a deep beam is much stiffer when it bends about the strong axis."],
+["Mechanics of Materials","h",1,"Doubling the diameter of a solid circular shaft changes its torsional stiffness by…","16×","2×","4×","8×","J = πd⁴/32, so stiffness scales with d⁴."],
+["Mechanics of Materials","h",1,"The von Mises criterion predicts yield when…","Distortion energy reaches its uniaxial-yield value","The largest principal stress hits yield","Hydrostatic stress hits yield","Strain hits 0.2%","It works well for ductile metals because yielding is driven by shear distortion, not hydrostatic pressure."],
+["Mechanics of Materials","h",1,"Compared with von Mises, the Tresca criterion is generally…","More conservative","Less conservative","Identical","Only valid for brittle materials","The Tresca hexagon sits inside the von Mises ellipse, so it predicts yield sooner."],
+["Mechanics of Materials","h",1,"A bar fully constrained at both ends is heated by ΔT. The thermal stress is…","EαΔT","αΔT","E/(αΔT)","EΔT/α","The free thermal strain αΔT is fully blocked, so σ = −EαΔT (compressive for heating)."],
+["Mechanics of Materials","h",1,"The maximum in-plane shear stress for principal stresses σ₁ and σ₂ is…","(σ₁ − σ₂)/2","σ₁ + σ₂","σ₁σ₂","(σ₁ + σ₂)/2","That is the radius of Mohr’s circle."],
+["Mechanics of Materials","h",1,"Stress concentrations matter most for…","Fatigue and brittle materials","Ductile parts under one static load","Hydrostatic compression","Pure thermal expansion","Ductile materials yield locally and redistribute load, while fatigue cracks and brittle fracture start at the peak."],
+["Mechanics of Materials","h",1,"In pure bending, the bending stress at distance y from the neutral axis is…","My/I","M/(Iy)","Mc/A","My/J","σ = My/I, so stress is linear in y and maximum at the outer fiber."],
+["FEA Scenarios","h",1,"Your ANSYS model shows peak stress at a sharp re-entrant corner, and it keeps rising with every mesh refinement. What do you do?","Treat it as a singularity: add a realistic fillet or read stress away from the corner","Report the peak as the most conservative result","Keep refining until it converges","Coarsen the mesh until it stops changing","Ideal sharp corners have theoretically infinite stress, so the peak never converges. Model the real fillet, or use stresses at a distance."],
+["FEA Scenarios","h",1,"Your FEA cantilever tip deflection is 3× larger than your hand calculation. What do you check first?","Units, boundary conditions, and load application","The legend color scale","The solver license","Whether the load is at the fixed end","A softer model usually means a support that isn’t truly fixed or a unit mismatch. Then check element type and mesh."],
+["Mechanics of Materials","i",1,"At the neutral axis of a rectangular beam, the maximum transverse shear stress is…","1.5 V/A","V/A","2 V/A","1.33 V/A","τ_max = 3V/2A, which is 50% above the average shear stress."],
+["Mechanics of Materials","i",1,"At the neutral axis of a solid circular section, the maximum transverse shear stress is…","4V/3A","1.5 V/A","V/A","2 V/A","τ_max = 4V/3A, slightly lower than the rectangle’s 3V/2A."],
+["Mechanics of Materials","i",0,"A thin-walled sphere has internal pressure p, radius r and wall thickness t. Its membrane stress is…","pr/2t in every in-plane direction","pr/t","pr/4t","pr/2t axially only","A sphere’s stress is equal in all directions, which is half a cylinder’s hoop stress."],
+["Mechanics of Materials","i",1,"Castigliano’s second theorem gives deflection at a load as…","The partial derivative of strain energy with respect to that load","The strain energy itself","The integral of M dx","The second derivative of moment","δᵢ = ∂U/∂Pᵢ, which is useful for deflections of frames and curved beams."],
+["Mechanics of Materials","i",1,"Saint-Venant’s principle says…","Local load details only affect stress near the load","Torsion is always uniform","Stress is the same everywhere in a bar","Bending can be ignored in tension","Roughly one member width away, the stress depends only on the statically equivalent load."],
+["Mechanics of Materials","i",0,"A simply supported beam under uniform load w has maximum midspan deflection…","5wL⁴/384EI","wL⁴/8EI","wL⁴/48EI","wL⁴/384EI","wL⁴/8EI is the cantilever result. The simply supported case carries the 5/384 factor."],
+["Mechanics of Materials","i",0,"A stress state has σx = 100 MPa, σy = 0 and τxy = 50 MPa. The larger principal stress is about…","120.7 MPa","100 MPa","150 MPa","86.6 MPa","σ₁ = 50 + √(50² + 50²) = 120.7 MPa."],
+["Mechanics of Materials","i",1,"A fixed–fixed column has what buckling load compared with a pinned–pinned column of the same length and EI?","4×","2×","1×","8×","K = 0.5 versus K = 1, so P_cr scales as 1/K², which gives 4×."],
+["Mechanics of Materials","i",0,"The torsion constant of a thin open section is about…","Σ b t³ / 3","Σ b t² / 3","Σ b³ t / 3","Σ b t³ / 12","Open sections are far weaker in torsion than closed ones because J scales with t³."],
+["Mechanics of Materials","x",0,"The bulk modulus K of an isotropic solid, in terms of E and ν, is…","E / (3(1 − 2ν))","E / (2(1 + ν))","E / (1 − 2ν)","3E / (1 − 2ν)","K → ∞ as ν → 0.5, which is the incompressible limit."],
+["Mechanics of Materials","x",0,"The torsion constant of a thin-walled closed section (enclosed area A, perimeter s, thickness t) is about…","4A²t/s","A²t/s","2A²t/s","4At/s","It comes from Bredt–Batho: J = 4A²/∮(ds/t)."],
+["Mechanics of Materials","x",0,"A long, simply supported plate under uniform edge compression has a minimum buckling coefficient k of…","4","1","2.5","8","σ_cr = kπ²E/(12(1−ν²))·(t/b)², with k = 4 in the long-plate limit."],
+["Mechanics of Materials","x",0,"For an isotropic material, E, G and ν are related by…","E = 2G(1 + ν)","E = G(1 + 2ν)","E = 3G(1 − ν)","E = G/(1 + ν)","Only two of the three constants are independent for an isotropic solid."]
+,
+["Aerospace Structures","e",0,"Which wing box parts are the gym bros that carry most of the bending load?","Spar caps and stringers","Ribs","Fairings","The paint","Caps and stringers sit far from the neutral axis and take the axial stress. The webs handle shear."],
+["Aerospace Structures","e",0,"Spar webs are mainly there to carry…","Shear","Axial bending load","Fuel","Engine thrust","A thin web is great at shear and is happy to be light, as long as it doesn’t buckle."],
+["Aerospace Structures","e",0,"Ribs in a wing mainly…","Hold the airfoil shape and stop skin and stringers from buckling","Carry all the lift directly","Generate thrust","Cool the fuel","Ribs are the wing’s rib cage: shape, load spreading, and buckling support."],
+["Aerospace Structures","e",0,"A V–n diagram shows…","Allowable load factor versus airspeed","Lift versus drag","Altitude versus Mach","Thrust versus fuel flow","It draws the flight envelope that the structure is designed to survive."],
+["Aerospace Structures","e",0,"Limit load times the usual 1.5 factor of safety gives…","Ultimate load","Yield load","Proof load","Fatigue load","Limit load is the highest load expected in service, and the structure must hold 1.5 times that without failing."],
+["Aerospace Structures","e",0,"Fail-safe design means…","The structure still carries load after one member fails","Nothing can ever fail","Parts are made of titanium","Only pilots detect failures","Redundant load paths are what keep a cracked part from becoming a bad day."],
+["Aerospace Structures","e",0,"A pressurized fuselage swells and relaxes every flight. The classic long-term concern is…","Fatigue","Creep","Galvanic corrosion only","Flutter","Every flight is one more pressure cycle, so cracks grow at windows, doors, and rivet lines."],
+["Aerospace Structures","h",0,"Shear flow q in a thin-walled beam has units of…","Force per unit length","Force per unit area","Force","Moment","q = τt, which is shear stress times wall thickness."],
+["Aerospace Structures","h",0,"In an idealized wing section, booms carry ___ and webs carry ___.","Direct stress; shear flow","Shear flow; direct stress","Torsion; bending","Pressure; heat","Idealization lumps the axial load into booms so the skin only has to move shear around."],
+["Aerospace Structures","h",0,"Moving across a boom in an idealized section, the shear flow…","Jumps by an amount proportional to the boom area times its distance from the neutral axis","Stays constant","Drops to zero","Depends only on skin thickness","Δq = −(S/I)·B·y. Booms are where the shear flow changes."],
+["Aerospace Structures","h",0,"Wagner’s tension field theory describes…","Post-buckled thin webs carrying load as diagonal tension","Fatigue crack growth","Flutter onset","Composite delamination","Thin webs buckle early but don’t quit. They wrinkle into diagonal tension bands."],
+["Aerospace Structures","h",0,"Compared with an open section, a closed thin-walled section is much stiffer in…","Torsion","Axial tension","Thermal expansion","Fatigue only","Closed cells carry torque as circulating shear flow. Open sections twist like a ribbon."],
+["Aerospace Structures","h",0,"“Effective width” of a buckled skin panel means…","Only the strip near the stiffener keeps carrying the full stress","The width where rivets go","The total panel width","The width of the fastener head","After buckling, the middle of the panel gives up and the edges next to the stiffeners carry the load."],
+["Aerospace Structures","h",0,"Crippling of a stiffener is…","Local buckling of its flanges or webs that triggers failure","Fatigue cracking at rivets","Overall column buckling","Thermal creep","Short, stocky stiffeners usually fail locally before Euler buckling comes into play."],
+["Aerospace Structures","h",0,"Load factor n is…","Lift divided by weight","Weight divided by lift","Thrust divided by weight","Drag divided by lift","A 60° steady turn gives n = 2, which is 2 g."],
+["Aerospace Structures","h",0,"In classical lamination theory, the A matrix relates…","In-plane forces to in-plane strains","Moments to curvatures","Temperature to strain","Shear to torsion","B couples in-plane and bending, and D relates moments to curvatures."],
+["Aerospace Structures","h",0,"The effective length factor K for a column fixed at one end and free at the other is…","2","1","0.7","0.5","P_cr = π²EI/(2L)², which is a quarter of the pinned–pinned value."],
+["Aerospace Structures","i",0,"A symmetric laminate has a B matrix that is…","Zero","Infinite","Equal to A","Equal to D","Symmetry about the mid-plane removes extension–bending coupling, so it won’t warp when loaded in-plane."],
+["Aerospace Structures","i",0,"The twist rate of a single closed cell under shear flow q is…","q∮(ds/t) / (2AG)","TL / EI","qA / (Gs)","2Aq / (Gt)","It follows from energy: twist per unit length depends on the circulation of q/(Gt) around the cell."],
+["Aerospace Structures","i",0,"The warping of a circular tube under pure torsion is…","Zero","Parabolic","Linear","Infinite","Circular sections stay flat while twisting, and noncircular ones warp."],
+["Aerospace Structures","i",0,"Rivets spaced too far apart in a stiffened skin invite…","Inter-rivet buckling (dimpling)","Galvanic corrosion","Thermal creep","Higher stiffness","The skin buckles in the gaps between fasteners."],
+["Aerospace Structures","i",0,"The Paris law says crack growth rate da/dN is proportional to…","ΔK raised to a power","Stress cycles only","Yield strength","Poisson’s ratio","da/dN = C(ΔK)^m. It is the backbone of damage tolerance analysis."],
+["Aerospace Structures","i",0,"Where does the Euler–Johnson transition show up?","Short columns follow Johnson’s curve and long columns follow Euler’s","Yield meets fracture","Skin starts to flutter","Torsion becomes bending","Euler overestimates the strength of stocky columns, and Johnson fixes that inelastic regime."],
+["Aerospace Structures","i",0,"Why is flutter a structures problem and not just an aerodynamics problem?","Elastic, inertial and aerodynamic forces couple and feed energy into the motion","It’s caused by thermal stress","Only low-E materials flutter","It only happens to rotors in hover","Flutter is aeroelastic. Modes can merge and extract energy from the airstream."],
+["Aerospace Structures","x",0,"The fatigue notch factor Kf = 1 + q(Kt − 1) uses a notch sensitivity q between…","0 and 1","−1 and 1","1 and Kt","0 and Kt","q = 0 means the notch has no effect and q = 1 means you feel the full Kt."],
+["Aerospace Structures","x",0,"A long, simply supported plate under uniform shear buckles with a coefficient k of about…","5.35","4","6.35","3.1","Compression gives k = 4 and shear gives about 5.35. Clamped edges raise k to about 8.98."],
+["Aerospace Structures","x",0,"Von Kármán’s effective width b_e/b scales with…","√(σ_cr / σ_max)","σ_cr / σ_max","(σ_cr / σ_max)²","E / σ_max","This is the classic result for the width of a buckled plate that still carries load."]
+,
+["Aerodynamics","e",0,"Lift on a wing mainly comes from…","A pressure difference between the upper and lower surfaces","Air hitting only the bottom","Engine thrust","Skin friction","Newton and Bernoulli are both right: the wing turns the flow down and the surface pressures differ."],
+["Aerodynamics","e",0,"Angle of attack is the angle between…","The chord line and the freestream","The wing and the horizon","The fuselage and the runway","Thrust and drag","It is measured against the oncoming flow, not the horizon, so a plane can stall in a dive."],
+["Aerodynamics","e",0,"A wing stalls when…","Flow separates over the upper surface and lift drops","The engine quits","Speed reaches Mach 1","Weight exceeds thrust","Stall is about angle of attack, not speed or engine power."],
+["Aerodynamics","e",0,"Drag that comes from making lift is…","Induced drag","Parasite drag","Wave drag","Form drag only","The tilted lift vector from downwash has a rearward component, so lift costs drag."],
+["Aerodynamics","e",0,"Raising a wing’s aspect ratio generally…","Lowers induced drag","Raises induced drag","Raises wave drag","Does nothing","Long skinny wings (think gliders) have weaker tip vortices relative to their lift."],
+["Aerodynamics","e",0,"A symmetric airfoil at zero angle of attack produces…","Zero lift","Maximum lift","Negative lift","Half of CLmax","Top and bottom are mirror images, so there is no net pressure difference."],
+["Aerodynamics","e",0,"Mach number is…","Flow speed divided by the local speed of sound","Speed times density","Speed divided by viscosity","Pressure over temperature","It is how you know if the air is behaving like a gentle fluid or a shock-throwing drama queen."],
+["Aerodynamics","h",0,"A positively cambered airfoil has a zero-lift angle of attack that is…","Negative","Positive","Zero","90°","Camber produces lift even at α = 0, so you need negative α to cancel it."],
+["Aerodynamics","h",0,"For a thin airfoil, the quarter-chord point is where…","The pitching moment is constant with angle of attack","Lift is zero","Drag is zero","Pressure is highest","That is the aerodynamic center, and it makes pitch analysis simple."],
+["Aerodynamics","h",0,"With a parabolic polar CD = CD0 + K·CL², minimum drag occurs when…","Induced drag equals parasite drag","Induced drag is twice parasite drag","Parasite drag is zero","CL is zero","Setting d(CD/CL)/dCL = 0 gives CD0 = K·CL², which is the best L/D point."],
+["Aerodynamics","h",0,"A turbulent boundary layer resists separation better than a laminar one because…","It carries more momentum near the wall","It is thinner and slower","It has no skin friction","It has no viscosity","Turbulent mixing pulls in high-energy air, which lets it fight an adverse pressure gradient."],
+["Aerodynamics","h",0,"Golf ball dimples help by…","Tripping the boundary layer to turbulent, which delays separation","Adding weight","Raising skin friction to slow the ball","Creating lift only","A smaller wake means much less pressure drag, so a dimpled ball flies farther."],
+["Aerodynamics","h",0,"The Kutta condition says…","Flow leaves the trailing edge smoothly","Lift is infinite","Flow separates at the leading edge","Pressure is zero at the nose","It picks the one circulation value that avoids infinite velocity at a sharp trailing edge."],
+["Aerodynamics","h",0,"The Kutta–Joukowski theorem gives lift per unit span as…","ρV∞Γ","ρV∞²Γ","½ρV²","ρΓ/V∞","Lift is proportional to circulation, with L′ = ρ∞V∞Γ."],
+["Aerodynamics","h",0,"Wingtip vortices are…","Air leaking around the tip from the high-pressure to low-pressure side","Caused by engine exhaust","Only present in supersonic flight","The source of skin friction","Pressure difference makes the flow roll up. It is also why wake turbulence is a real thing for following aircraft."],
+["Aerodynamics","h",0,"Flaps raise CLmax mainly by…","Adding camber and area","Reducing weight","Adding thrust","Lowering Reynolds number","More camber shifts the lift curve up, so you can fly slower."],
+["Aerodynamics","h",0,"Wave drag appears when…","Local supersonic flow develops shocks","Reynolds number is low","The wing is swept back","Lift is zero","It shows up in the transonic range as shocks steal momentum from the flow."],
+["Aerodynamics","i",0,"An Oswald efficiency of e = 1 corresponds to…","An elliptical lift distribution","A rectangular wing","Zero lift","Infinite span","Real wings land between about 0.7 and 0.95."],
+["Aerodynamics","i",0,"Prandtl’s lifting-line theory models a finite wing as…","A bound vortex with trailing vortices","A single source","A uniform doublet","A viscous slab","Circulation varies along the span, which sheds a trailing vortex sheet and gives induced downwash."],
+["Aerodynamics","i",0,"Ground effect reduces induced drag because…","The ground limits downwash and weakens the tip vortices","Air is denser near the ground","Skin friction vanishes","The wing makes thrust","Pilots feel the plane float on landing, and that is why."],
+["Aerodynamics","i",0,"Flat-plate transition to turbulence typically starts around a Reynolds number of…","5×10⁵","5×10²","5×10³","5×10⁹","It varies with roughness and freestream turbulence, but 5×10⁵ is the classic number."],
+["Aerodynamics","i",0,"The shedding frequency of a Kármán vortex street behind a cylinder is set by…","The Strouhal number, about 0.2","Mach number","Froude number","Prandtl number","f = St·V/D. It’s why power lines hum in the wind."],
+["Aerodynamics","i",0,"For a swept wing, the effective Mach number normal to the leading edge is…","M cos Λ","M sin Λ","M / cos Λ","M","Only the normal component sees the airfoil, which is why sweep delays shocks."],
+["Aerodynamics","i",0,"A supercritical airfoil is designed to…","Delay drag rise by flattening the upper surface and weakening the shock","Reduce weight","Increase skin friction","Fly supersonic","It has a flatter top and an aft-loaded camber to keep the shock gentle."],
+["Aerodynamics","i",0,"The area rule reduces transonic wave drag by…","Smoothing the cross-sectional area distribution along the aircraft","Adding winglets","Reducing sweep","Raising wing loading","It is the reason for the famous “Coke bottle” fuselage."],
+["Aerodynamics","x",0,"Thin airfoil theory gives a flat plate at angle α a quarter-chord pitching moment of…","Zero","−πα/2","πα","−πα/4","The aerodynamic center is at c/4, so the moment about it is constant, and it is zero for symmetric sections."],
+["Aerodynamics","x",0,"A classic Joukowski airfoil has a trailing edge that is…","Cusped","Blunt","Rounded","Flat","The Joukowski map sends a circle through the singular point to a sharp cusp."],
+["Aerodynamics","x",0,"For an elliptically loaded wing, the induced angle of attack is…","CL/(π·AR)","CL/(2π·AR)","2CL/(π·AR)","CL·AR/π","It is constant along the span, and CDi = CL²/(π·AR)."],
+["Aerodynamics","x",0,"The maximum L/D of a parabolic polar is…","½·√(π e AR / CD0)","√(π e AR / CD0)","½·π e AR / CD0","2·√(π e AR·CD0)","At best L/D, CD = 2·CD0, so (L/D)max = ½·√(π e AR/CD0)."]
+/*MORE*/
+];
+const TOP={Structures:"Aerospace Structures",Aerodynamics:"Aerodynamics",Propulsion:"Aerospace Propulsion",Manufacturing:"Manufacturing","Flight mechanics":"Flight Mechanics"};
+const POOL=Q.flatMap((rows,c)=>rows.map(r=>[TOP[CATS[c]],"e",0,...r])).concat(B);
+const mk=(r,seed)=>{const o=shuffle(r.slice(4,8),rng(seed));return{cat:r[0],d:r[1],q:r[3],opts:o,ans:o.indexOf(r[4]),ex:r[8]}};
+const pick=(f,n)=>shuffle(POOL.filter(f),Math.random).slice(0,n).map(r=>mk(r,Math.random()*1e9|0));
+const used=[];
+const DP=["e","h","h","i","x"].map((d,s)=>{const c=shuffle(POOL.filter(r=>r[1]===d),rng(DAY*13+s));const r=c.find(r=>!used.includes(r[0]))||c[0];used.push(r[0]);return mk(r,DAY*7+s)});
+if(S.v!==POOL.length){S.v=POOL.length;S.a=[];save()}
+const R=a=>a[Math.random()*a.length|0];
+const OK=["Correct.","Nailed it.","Smooth as laminar flow.","Textbook.","Chef’s kiss, engineer edition."];
+const NO=["Not quite.","Ouch.","Nope. The wind tunnel disagrees.","Bold choice. Wrong, but bold.","Swing and a miss.","Yikes. Read the explanation, then we never speak of this."];
+const TO=["Time’s up. Tick tock, hotshot.","Too slow. The clock is not impressed."];
+const MSG=[["Zero. Even the wind tunnel is embarrassed for you.","0 for 5. The Wright brothers just rolled over. Gently.","Random guessing would have done better. Impressive, in its own way.","That wasn’t a quiz, that was controlled flight into terrain."],["One correct. You have landing gear and a dream.","1 for 5. It’s a start. A tiny, wobbly start.","Ground school called. They want you back.","You got one. The others were probably out to get you."],["Taxiing. Occasionally on the runway.","Your static margin is looking… negative.","Some lift, some drag, lots of vibes.","Close enough to be dangerous, far enough to need a review."],["Cleared for takeoff. Just keep the nose up.","Solid. Your professor would say “fine.”","Respectable climb. Don’t look at the Impossible one.","You passed. The curve is clapping softly."],["One squawk from perfect. Ground crew is impressed.","So close you can taste the jet fuel.","Nearly flawless. The one you missed is judging you from the hangar.","Almost a full send. Almost."],["Mach 5 achieved. Please remain seated while we pick you up.","Perfect. Show-off. We’re framing this.","Flawless. Somewhere an aero professor smiles.","Chief Engineer energy. Zero notes."]];
+const score=()=>G.a.reduce((n,x,i)=>n+(x===G.P[i].ans?1:0),0);
+const dscore=()=>S.a.reduce((n,x,i)=>n+(x===DP[i].ans?1:0),0);
 function finish(){if(S.fin===DAY)return;const st=S.stats,s=score();st.played++;st.dist[s]++;st.streak=st.last===DAY-1?st.streak+1:1;st.max=Math.max(st.max,st.streak);st.last=DAY;S.fin=DAY}
-
-function tiles(){return P.map((_,i)=>{let c="tile";if(i<S.a.length)c+=S.a[i]===P[i].ans?" ok":" bad";else if(i===S.a.length)c+=" cur";return `<div class="${c}">${i+1}</div>`}).join("")}
-
+function start(mode,make){G={mode,P:make(),a:[],rev:false,make};V="play";render()}
+function daily(){G={mode:"daily",P:DP,a:S.a,rev:false};V="play";render()}
+function answer(k){clearInterval(timer);G.a.push(k);G.rev=true;if(G.mode==="daily"){if(G.a.length===5)finish();save()}render()}
+function arm(){clearInterval(timer);if(G.mode!=="timed"||G.rev||G.a.length>=G.P.length)return;const t0=Date.now();timer=setInterval(()=>{const l=Math.max(0,5000-(Date.now()-t0));const b=$("#bar");if(b)b.style.width=l/50+"%";if(l<=0)answer(-1)},100)}
 let shareText="";
-function results(){
-  const s=score(),st=S.stats;
-  const grid=S.a.map((x,i)=>x===P[i].ans?"🟩":"🟥").join("");
-  shareText="MACH 5 #"+NUM+"  "+s+"/5\n"+grid;
-  const msg=["Back to the drawing board","Needs another design review","Taxiing to the runway","Cleared for takeoff","One squawk from perfect","Mach 5 achieved"][s];
-  const mx=Math.max(1,...st.dist);
-  const win=st.played?Math.round(100*st.dist.reduce((t,n,k)=>t+n*k,0)/(5*st.played)):0;
-  let h=`<div class="card"><p class="score">${s}/5</p><p class="msg">${msg}</p><p class="grid">${grid}</p>
-  <button class="btn" id="copy">Copy result</button>
-  <h2>Today’s questions</h2><ol class="rv">`;
-  P.forEach((p,i)=>{h+=`<li>${S.a[i]===p.ans?"🟩":"🟥"} <b>${p.cat}:</b> ${p.q}<small>Answer: ${p.opts[p.ans]}</small></li>`});
-  h+=`</ol><h2>Your stats</h2><div class="stats"><p><strong>${st.played}</strong>Played</p><p><strong>${win}%</strong>Avg. score</p><p><strong>${st.streak}</strong>Streak</p><p><strong>${st.max}</strong>Best streak</p></div>
-  <div class="bars">`;
-  st.dist.forEach((n,k)=>{h+=`<div class="${k===s?"me":""}"><span>${k}</span><i style="width:${Math.round(100*n/mx)}%"></i><span>${n}</span></div>`});
-  h+=`</div><h2>Next set in</h2><p class="cd" id="cd" style="font-size:24px;margin:0">--:--:--</p></div>`;
-  return h;
-}
 
-function render(){
-  const n=S.a.length,st=S.stats;
-  $("#num").textContent="Set #"+NUM+" · streak "+(st.last!==null&&st.last>=DAY-1?st.streak:0);
-  let h=`<div class="tiles">${tiles()}</div>`;
-  if(n<5||revealed){
-    const i=revealed?n-1:n,p=P[i];
-    h+=`<div class="card"><div class="cat">${p.cat}, question ${i+1} of 5</div><p class="q">${p.q}</p>`;
-    p.opts.forEach((o,k)=>{let c="opt",d="";if(revealed){d="disabled";c+=k===p.ans?" ok":k===S.a[i]?" bad":" dim"}
+function menu(){
+  const ds=S.a.length===5?"Done today: "+dscore()+"/5":S.a.length?"In progress":"Not played yet";
+  return `<p class="sub" style="margin:22px 0 12px">${POOL.length} questions in the bank. Pick a mode.</p><div class="modes">
+  <button class="mode" data-go="daily"><b>Daily 5</b><span>Same five questions for everyone, once a day, climbing from Easy to Impossible. ${ds}.</span></button>
+  <button class="mode" data-go="timed"><b>Timed</b><span>Five questions, five seconds each. No time to overthink.</span></button>
+  <button class="mode" data-go="interview"><b>Interview prep</b><span>Conceptual questions on topics interviewers ask about. Pick a topic.</span></button>
+  <button class="mode" data-go="custom"><b>Pick your difficulty</b><span>Easy, Hard, Insane, or Impossible.</span></button></div>`}
+function topicPick(){
+  const m={};POOL.forEach(r=>{if(r[2])m[r[0]]=(m[r[0]]||0)+1});
+  let h=`<div class="card"><p class="q">Interview prep: pick a topic</p><div class="modes"><button class="mode" data-topic=""><b>All topics</b><span>Up to 10 random questions</span></button>`;
+  Object.keys(m).sort().forEach(k=>h+=`<button class="mode" data-topic="${k}"><b>${k}</b><span>${m[k]} question${m[k]>1?"s":""}</span></button>`);
+  return h+`</div></div>`}
+function diffPick(){
+  const t={e:"Intro-course fundamentals",h:"Upper-division material",i:"Gotchas and fine details",x:"Constants and edge cases"};
+  let h=`<div class="card"><p class="q">Pick your difficulty</p><div class="modes">`;
+  Object.keys(t).forEach(k=>h+=`<button class="mode" data-diff="${k}"><b>${DL[k]}</b><span>${t[k]} · ${POOL.filter(r=>r[1]===k).length} questions</span></button>`);
+  return h+`</div></div>`}
+function tiles(){return G.P.map((_,i)=>{let c="tile";if(i<G.a.length)c+=G.a[i]===G.P[i].ans?" ok":" bad";else if(i===G.a.length)c+=" cur";return `<div class="${c}">${i+1}</div>`}).join("")}
+function results(){
+  const s=score(),N=G.P.length,d=G.mode==="daily",st=S.stats;
+  const grid=G.a.map((x,i)=>x===G.P[i].ans?"🟩":"🟥").join("");
+  const nm={daily:"MACH 5 #"+NUM,timed:"MACH 5 Timed",interview:"MACH 5 Interview",custom:"MACH 5 "+DL[G.P[0].d]}[G.mode];
+  shareText=nm+"  "+s+"/"+N+"\n"+grid;
+  const msg=R(MSG[Math.round(5*s/N)]);
+  let h=`<div class="card"><p class="score">${s}/${N}</p><p class="msg">${msg}</p><p class="grid">${grid}</p><button class="btn" id="copy">Copy result</button> ${d?"":'<button class="btn ghost" id="again">Play again</button>'}<h2>Questions</h2><ol class="rv">`;
+  G.P.forEach((p,i)=>{h+=`<li>${G.a[i]===p.ans?"🟩":"🟥"} <b>${p.cat}:</b> ${p.q}<small>Answer: ${p.opts[p.ans]}</small></li>`});
+  h+=`</ol>`;
+  if(d){
+    const mx=Math.max(1,...st.dist);
+    h+=`<h2>Your stats</h2><div class="stats"><p><strong>${st.played}</strong>Played</p><p><strong>${st.streak}</strong>Streak</p><p><strong>${st.max}</strong>Best streak</p></div><div class="bars">`;
+    st.dist.forEach((n,k)=>{h+=`<div class="${k===s?"me":""}"><span>${k}</span><i style="width:${Math.round(100*n/mx)}%"></i><span>${n}</span></div>`});
+    h+=`</div><h2>Next set in</h2><p class="cd" id="cd" style="font-size:24px;margin:0">--:--:--</p>`}
+  return h+`</div>`}
+function play(){
+  const N=G.P.length,n=G.a.length;
+  let h=`<div class="tiles" style="grid-template-columns:repeat(${N},1fr)">${tiles()}</div>`;
+  if(n<N||G.rev){
+    const i=G.rev?n-1:n,p=G.P[i];
+    h+=`<div class="card">${G.mode==="timed"&&!G.rev?'<div class="tbar"><i id="bar"></i></div>':""}<div class="cat">${p.cat} · ${DL[p.d]}, question ${i+1} of ${N}</div><p class="q">${p.q}</p>`;
+    p.opts.forEach((o,k)=>{let c="opt",d="";if(G.rev){d="disabled";c+=k===p.ans?" ok":k===G.a[i]?" bad":" dim"}
       h+=`<button class="${c}" ${d} data-k="${k}"><b>${"ABCD"[k]}</b><span>${o}</span></button>`});
-    if(revealed){h+=`<p class="fb"><strong>${S.a[i]===p.ans?"Correct.":"Not quite."}</strong> ${p.ex}</p><button class="btn" id="next">${n<5?"Next question":"See results"}</button>`}
+    if(G.rev){const k=G.a[i];h+=`<p class="fb"><strong>${k===p.ans?R(OK):k<0?R(TO):R(NO)}</strong> ${p.ex}</p><button class="btn" id="next">${n<N?"Next question":"See results"}</button>`}
     h+=`</div>`;
   }else h+=results();
+  return h}
+function render(){
+  const st=S.stats;
+  $("#num").textContent="Set #"+NUM+" · streak "+(st.last!==null&&st.last>=DAY-1?st.streak:0);
+  let h=V==="menu"?menu():V==="topic"?topicPick():V==="diff"?diffPick():play();
+  if(V!=="menu")h=`<button class="link" id="menu">‹ Menu</button>`+h;
   $("#app").innerHTML=h;
+  if(V==="play")arm();else clearInterval(timer);
   tick();
 }
-
 $("#app").addEventListener("click",e=>{
-  const b=e.target.closest("[data-k]");
-  if(b&&!revealed&&S.a.length<5){S.a.push(+b.dataset.k);revealed=true;if(S.a.length===5)finish();save();render();return}
-  if(e.target.closest("#next")){revealed=false;render();window.scrollTo(0,0);return}
-  if(e.target.closest("#copy")){
-    const btn=e.target.closest("#copy"),done=()=>{btn.textContent="Copied"};
-    try{navigator.clipboard.writeText(shareText).then(done,()=>{btn.textContent="Copy failed"})}catch(err){btn.textContent="Copy failed"}
-  }
+  const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.k!==undefined){if(G&&!G.rev&&G.a.length<G.P.length)answer(+t.dataset.k);return}
+  if(t.id==="next"){G.rev=false;render();window.scrollTo(0,0);return}
+  if(t.id==="menu"){V="menu";render();return}
+  if(t.id==="again"){start(G.mode,G.make);return}
+  if(t.id==="copy"){const done=()=>{t.textContent="Copied"};try{navigator.clipboard.writeText(shareText).then(done,()=>{t.textContent="Copy failed"})}catch(err){t.textContent="Copy failed"}return}
+  const go=t.dataset.go;
+  if(go==="daily")daily();
+  else if(go==="timed")start("timed",()=>pick(()=>1,5));
+  else if(go==="interview"){V="topic";render()}
+  else if(go==="custom"){V="diff";render()}
+  else if(t.dataset.topic!==undefined){const tp=t.dataset.topic;start("interview",()=>pick(r=>r[2]&&(!tp||r[0]===tp),10))}
+  else if(t.dataset.diff){const d=t.dataset.diff;start("custom",()=>pick(r=>r[1]===d,5))}
 });
-
 function tick(){
   if(today()!==DAY){location.reload();return}
   const el=$("#cd");if(!el)return;
